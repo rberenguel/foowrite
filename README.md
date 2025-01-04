@@ -68,6 +68,10 @@ Adding a new screen to a Pico base is "as easy" as replicating what is available
 
 Adding another system that is Bluepad32 compatible _should_ be doable but I don't want to figure that one out.
 
+The editor itself is just a very large state machine keeping track of mode and what keys are in the command string. It's somewhat ugly, I want to refactor it a bit but I don't want to risk making the code longer.
+
+The internal data for the editor is a `std::string` for the current line, and a `std::list<std::string>` for the document. All operations are then done on these. So far it has seemed fast enough and relatively easy, so there is no reason to add a rope or anything fancy. After all, the Pico can't handle a very long document anyway (around 100k characters are left of memory available).
+
 ## Flash the device
 
 You will need the `uf2` file built above (or get one from [here](https://github.com/rberenguel/foowrite/releases/)) and a Pico W (TODO: test with a Pico 2 W, I have one for that) with a GFX Pack screen from Pimoroni. If you are feeling adventurous, just write your own screen driver (like [`gfx.cc`](https://github.com/rberenguel/foowrite/blob/main/src/pico/gfx/gfx.cc)). Put the device in DFU mode, upload the `uf2` file and the pico should boot with the splash screen and with a blue shade hinting at "I want to connect to something via bluetooth".
