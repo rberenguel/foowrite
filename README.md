@@ -4,6 +4,8 @@ A distraction-free writing device you can take with you anywhere. With vim keybi
 
 ---
 
+Click to see a video of it in action. It was cold.
+
 [![](https://raw.githubusercontent.com/rberenguel/foowrite/refs/heads/main/media/foowrite-video-img.jpg)](https://www.youtube.com/watch?v=FT0cgbyiSng&mode=theatre)
 
 - [foowrite](#foowrite)
@@ -58,7 +60,7 @@ Adding this should be a matter of `git submodule add https://github.com/path-to-
 
 ## Code shape
 
-The editor core is in `editor.cc`, which requires an implementation of the definitions in `output.h`. For the GFX, that is in `pico/gfx/gfx.cc`. The bluetooth stack runs on a loop on core 0, and the editor only reacts to key events on core 1. This might not be needed for the GFX, but was required for the Badger2040. The main loop is in C, and the hooks to the editor are provided as `extern C` functions calling the editor singleton. Saving to flash is a bit convoluted, since it needs to happen on core 0 (or more like, it can't be interrupted).
+The editor core is in [`editor.cc`](https://github.com/rberenguel/foowrite/blob/main/src/editor.cc), which requires an implementation of the definitions in [`output.hpp`](https://github.com/rberenguel/foowrite/blob/main/src/output.hpp). For the GFX, that is in [`pico/gfx/gfx.cc`](https://github.com/rberenguel/foowrite/blob/main/src/pico/gfx/gfx.cc). The bluetooth stack runs on a loop on core 0, and the editor only reacts to key events on core 1. This might not be needed for the GFX, but was required for the Badger2040. The main loop is in C, and the hooks to the editor are provided as `extern C` functions calling the editor singleton. Saving to flash is a bit convoluted, since it needs to happen on core 0 (or more like, it can't be interrupted).
 
 To avoid adding interrupts or more event handlers, every time a Bluetooth keypress is checked a method on the screen output is called to check any buttons (if provided). This makes using the device buttons (the GFX has buttons A-E) a bit strange: you hold one of them _and_ press a keyboard key, but avoids interrupts.
 
@@ -68,7 +70,7 @@ Adding another system that is Bluepad32 compatible _should_ be doable but I don'
 
 ## Flash the device
 
-You will need the `uf2` file built above (or get one from here TODO(RELEASE)) and a Pico W (TODO: test with a Pico 2 W, I have one for that) with a GFX Pack screen from Pimoroni. If you are feeling adventurous, just write your own screen driver (like `gfx.cc`). Put the device in DFU mode, upload the `uf2` file and the pico should boot with the splash screen and with a blue shade hinting at "I want to connect to something via bluetooth".
+You will need the `uf2` file built above (or get one from [here](https://github.com/rberenguel/foowrite/releases/)) and a Pico W (TODO: test with a Pico 2 W, I have one for that) with a GFX Pack screen from Pimoroni. If you are feeling adventurous, just write your own screen driver (like [`gfx.cc`](https://github.com/rberenguel/foowrite/blob/main/src/pico/gfx/gfx.cc)). Put the device in DFU mode, upload the `uf2` file and the pico should boot with the splash screen and with a blue shade hinting at "I want to connect to something via bluetooth".
 
 ## Usage
 
@@ -96,9 +98,9 @@ Ex commands:
 - `:e`: Open document
 - `:wc`: Show word, character and line count in the command line space
 - `:ps`: Send the current document through the serial port
-- `:lorem` (only when setting `VERIFY_MODE` 1 in `editor.cc`): set one long line in the document
-- `:test_doc` (only when setting `VERIFY_MODE` 1 in `editor.cc`): Keep adding 100 character lines until panic, shows number of lines in serial
-- `:test_line` (only when setting `VERIFY_MODE` 1 in `editor.cc`): Keep adding characters to the current line until panic, shows number of characters in serial
+- `:lorem` (only when setting `VERIFY_MODE` 1 in [`editor.cc`](https://github.com/rberenguel/foowrite/blob/main/src/editor.cc)): set one long line in the document
+- `:test_doc` (only when setting `VERIFY_MODE` 1 in [`editor.cc`](https://github.com/rberenguel/foowrite/blob/main/src/editor.cc)): Keep adding 100 character lines until panic, shows number of lines in serial
+- `:test_line` (only when setting `VERIFY_MODE` 1 in [`editor.cc`](https://github.com/rberenguel/foowrite/blob/main/src/editor.cc)): Keep adding characters to the current line until panic, shows number of characters in serial
 
 To save, go to normal mode with `ESC`, type `:w` and press enter. For now there is only one file (I may change this in the future). To open it, `:e` and enter. To get the file "out", plug the pico to a computer, connect to it for example via `minicom` (`minicom -b 115200 -o -D /dev/tty.usbmodem11301` but the port in your case will be different), pair a keyboard and in normal mode type `:ps`. The file will be output to the serial console. I'm trying to find smoother ways to do this.
 
