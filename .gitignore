@@ -1,0 +1,9 @@
+.DS_Store
+.vscode
+*.swp
+build.mac/**
+build.pico/**
+build.badger/**
+build.unicorn/**
+!build.mac/README
+!build.pico/README

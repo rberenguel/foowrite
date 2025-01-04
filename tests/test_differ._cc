@@ -1,0 +1,88 @@
+#include <gtest/gtest.h>
+#include "../src/common.h"
+
+std::vector<std::string> Splitter(std::vector<std::string> lines) {
+  std::vector<std::string> listing;
+  //for(const auto &line : lines){
+  for (auto i = 0; i < lines.size(); i++) {
+    auto line = lines[i];
+    listing.push_back(line);
+  }
+  return listing;
+}
+
+TEST(ScreenDiffer, DifferFirstLine) {
+  std::vector<int> result = {1};
+  auto output = Splitter({{"a"}});
+  auto display = Splitter({{"a"}});
+  auto diff = StringDiffer(output, display, 0);
+  EXPECT_EQ(diff, result);
+
+  result = {1};
+  output = Splitter({{"ab"}});
+  diff = StringDiffer(output, display, 0);
+  EXPECT_EQ(diff, result);
+
+  result = {0};
+  output = Splitter({{"c"}});
+  display = Splitter({{"ab"}});
+  diff = StringDiffer(output, display, 0);
+  EXPECT_EQ(diff, result);
+
+  result = {4};
+  output = Splitter({{"hello"}});
+  display = Splitter({{"hell"}});
+  diff = StringDiffer(output, display, 0);
+  EXPECT_EQ(diff, result);
+}
+
+TEST(ScreenDiffer, DifferMultiline) {
+  std::vector<int> result = {1, 0};
+  auto output = Splitter({{"a"}, {"b"}});
+  auto display = Splitter({{"a"}});
+  auto diff = StringDiffer(output, display, 0);
+  EXPECT_EQ(diff, result);
+
+  result = {0, 1};
+  output = Splitter({{""}, {"b"}});
+  display = Splitter({{"a"}, {"bc"}});
+  diff = StringDiffer(output, display, 0);
+  EXPECT_EQ(diff, result);
+
+  result = {0, 0};
+  output = Splitter({{""}, {""}});
+  display = Splitter({{"a"}, {"b"}});
+  diff = StringDiffer(output, display, 0);
+  EXPECT_EQ(diff, result);
+
+  result = {5, 4};
+  output = Splitter({{"hello"}, {"world"}});
+  display = Splitter({{"hello"}, {"worl"}});
+  diff = StringDiffer(output, display, 0);
+  EXPECT_EQ(diff, result);
+
+  result = {5, 0};
+  output = Splitter({{"hello"}, {}});
+  display = Splitter({{"hello"}, {"worl"}});
+  diff = StringDiffer(output, display, 0);
+  EXPECT_EQ(diff, result);
+
+  result = {5, -1};
+  output = Splitter({{"hello"}, {}});
+  display = Splitter({{"hello"}, {}});
+  diff = StringDiffer(output, display, 0);
+  EXPECT_EQ(diff, result);
+}
+
+TEST(ScreenDiffer, DifferMultiline2) {
+  std::vector<int> result = {1, 1};
+  auto output = Splitter({{"a"}, {"bcde"}});
+  auto display = Splitter({{"a"}, {"b"}});
+  auto diff = StringDiffer(output, display, 0);
+  EXPECT_EQ(diff, result);
+  result = {5, 4};
+  output = Splitter({{"aarst"}, {"bcde"}});
+  display = Splitter({{"aarst"}, {"bcde"}});
+  diff = StringDiffer(output, display, 0);
+  EXPECT_EQ(diff, result);
+}
