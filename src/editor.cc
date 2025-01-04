@@ -614,6 +614,11 @@ void Editor::ProcessKey(const uint8_t key, KeyModifiers* modifiers,
   }
 }
 
+void Editor::Refresh(){
+  // Helper to get the output to request a refresh
+  output->Emit(current_line_, ncolumn_, mode_);
+}
+
 void Editor::Init() {
   output = new Output();  // This dies with the editor, so :shrug:
   row_ = document_.begin();

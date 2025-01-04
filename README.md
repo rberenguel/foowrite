@@ -15,6 +15,7 @@ Click to see a video of it in action. It was cold.
   - [Usage](#usage)
   - [Why? Short story](#why-short-story)
   - [Roadmap](#roadmap)
+  - [Pico 2 W](#pico-2-w)
   - [Dangers](#dangers)
   - [Credits](#credits)
   - [Contributing](#contributing)
@@ -43,7 +44,7 @@ cd build.mac
 cmake .. -DBUILD_FOR_PICO=off
 ```
 
-if you want to run the tests (`./tests` after the above). Additional flags can be used for particular Pico flavours, but currently only GFX compiles. See `CMakeLists.txt` for the options.
+if you want to run the tests (`./tests` after the above). Additional flags can be used for particular Pico flavours, but currently only GFX and Display Pack 1 compile. See `CMakeLists.txt` for the options.
 
 Requires: Pico SDK, Pimoroni libraries, [bluepad32](https://github.com/ricardoquesada/bluepad32), and [pico-filesystem](https://github.com/Memotech-Bill/pico-filesystem). See [Pimoroni](https://github.com/pimoroni/pimoroni-pico) and [Pico](https://github.com/pimoroni/pimoroni-pico/blob/main/setting-up-the-pico-sdk.md) for setup details, if anything is missing it is likely explained there, after all it is how I set it up too.
 
@@ -56,7 +57,7 @@ Reminder for myself in case I screw something:
  bb51ce5ad0f6a880b4a16fdb7dd0729a27a057d3 pimoroni-pico (v1.22.2-1bitpng-99-gbb51ce5a)
 ```
 
-Adding this should be a matter of `git submodule add https://github.com/path-to-repo`.
+Adding these should be a matter of `git submodule add https://github.com/path-to-repo`.
 
 ## Code shape
 
@@ -68,7 +69,7 @@ Adding a new screen to a Pico base is "as easy" as replicating what is available
 
 Adding another system that is Bluepad32 compatible _should_ be doable but I don't want to figure that one out.
 
-The editor itself is just a very large state machine keeping track of mode and what keys are in the command string. It's somewhat ugly, I want to refactor it a bit but I don't want to risk making the code longer.
+The editor itself is just a large state machine keeping track of mode and what keys are in the command string. It's somewhat ugly, I want to refactor it a bit but I don't want to risk making the code longer.
 
 The internal data for the editor is a `std::string` for the current line, and a `std::list<std::string>` for the document. All operations are then done on these. So far it has seemed fast enough and relatively easy, so there is no reason to add a rope or anything fancy. After all, the Pico can't handle a very long document anyway (around 100k characters are left of memory available).
 
@@ -147,8 +148,25 @@ buggy, but seems usable.
 ## Roadmap
 
 - Some more vim commands (go to line and search, likely, `dt` and `ct`, less likely).
-- Try on a Pico 2 W.
-- Implementation for the small [Pico Display Pack](https://shop.pimoroni.com/products/pico-display-pack?variant=32368664215635) or the larger [Pico Display Pack 2.0](https://shop.pimoroni.com/products/pico-display-pack-2-0?variant=39374122582099), to have 2 reference implementations.
+- [x] ~Try on a Pico 2 W.~ Failed on the first try
+- [x] ~Implementation for the small [Pico Display Pack](https://shop.pimoroni.com/products/pico-display-pack?variant=32368664215635) or the larger [Pico Display Pack 2.0](https://shop.pimoroni.com/products/pico-display-pack-2-0?variant=39374122582099), to have 2 reference implementations.~ Available in [`display1.cc`](https://github.com/rberenguel/foowrite/blob/main/src/display1/display1.cc))
+
+## Pico 2 W
+
+Gave it a quick shot, and almost. Pairs, picks a few keys and then either the following or just hangs.
+
+```
+10.488: cybt_hci_read_packet: too much data len 141886
+cyw43_bluetooth_hci_read: failed to read from shared bus
+10.490: cybt_hci_read_packet: too much data len 1573120
+cyw43_bluetooth_hci_read: failed to read from shared bus
+10.491: error: cybt_hci_read buffer overflow fw_b2h_buf_count=24 available=1147
+10.491: error: cybt_hci_read bt2host_in_val=1416 bt2host_out_val=1392
+
+*** PANIC ***
+
+cyw43 buffer overflow
+```
 
 ## Dangers
 

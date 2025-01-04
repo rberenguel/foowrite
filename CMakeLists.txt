@@ -2,15 +2,25 @@ cmake_minimum_required(VERSION 3.13)
 
 set(CMAKE_OSX_SYSROOT /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.2.sdk)
 
+set(PROJECT_NAME "foowrite")
+set(TARGET_NAME "-")
+set(LAYOUT_NAME "")
+
 option(BUILD_FOR_PICO "Build for the pico w" ON)
-option(BUILD_FOR_UNICORN "Build for the pico w with unicorn" OFF)
-option(BUILD_FOR_BADGER "Build for the pico w with badger" OFF)
-option(BUILD_FOR_GFX "Build for the pico w with GFX pack" ON)
+
+set(DISPLAY "GFX" CACHE STRING "Select display type")
+set_property(CACHE DISPLAY PROPERTY STRINGS 
+  "NONE" "UNICORN" "BADGER" "GFX" "DISPLAY1")
+
 option(USE_QWERTY "Use the qwerty layout" OFF)
+
+# Example: cmake .. -DBUILD_FOR_PICO=on -DDISPLAY=DISPLAY1 -DUSE_QWERTY=off
 
 if(USE_QWERTY)
     add_definitions(-DQWERTY_MODE)
+    set(LAYOUT_NAME "-qwerty")
 endif()
+
 
 # PICO_BOARD should be set to 'pico_w', or not set at all.
 if(DEFINED PICO_BOARD AND NOT ${PICO_BOARD} STREQUAL "pico_w")
@@ -44,7 +54,9 @@ if(BUILD_FOR_PICO)
     # initialize the Raspberry Pi Pico SDK
     pico_sdk_init()
     add_subdirectory (pico-filesystem pfs)
-    if(BUILD_FOR_GFX)
+    if(DISPLAY STREQUAL "GFX")
+        message("Building for Pico GFX")
+        set(TARGET_NAME "-gfx")
         include(libraries/pico_graphics/pico_graphics)
         include(libraries/gfx_pack/gfx_pack)
         add_executable(foowrite
@@ -68,12 +80,51 @@ if(BUILD_FOR_PICO)
             bluepad32
             hardware_pio
             hardware_dma
-            #pimoroni_i2c
             pico_graphics
             gfx_pack
         )
     endif()
-    if(BUILD_FOR_UNICORN)
+    if(DISPLAY STREQUAL "DISPLAY1")
+        message("Building for Display Pack 1 (1 inch)")
+        set(TARGET_NAME "-display1")
+        include(libraries/pico_graphics/pico_graphics)
+        include(libraries/pico_display/pico_display)
+        include(drivers/st7789/st7789)
+        include(drivers/rgbled/rgbled)
+        include(drivers/button/button)
+        add_executable(foowrite
+            src/main.c
+            src/pico/pico_bt.c
+            src/pico/keyboard.c
+            src/pico/display1/display1.cc
+            src/pico/display1/splash.cc
+            src/editor.cc
+            src/pico/saving.cc
+            src/pico/layout.c
+        )
+        target_link_libraries(foowrite PUBLIC
+            hardware_pio
+            flash_filesystem
+            pico_stdlib
+            pico_time
+            hardware_spi
+            hardware_pwm
+            pico_multicore
+            pico_cyw43_arch_none
+            pico_btstack_classic
+            pico_btstack_cyw43
+            bluepad32
+            hardware_dma
+            pico_display
+            pico_graphics
+            rgbled
+            button
+            st7789
+        )
+    endif()
+    if(DISPLAY STREQUAL "UNICORN")
+        message("Building for Pico Unicorn")
+        set(TARGET_NAME "-unicorn")
         include(libraries/pico_graphics/pico_graphics)
         include(libraries/pico_unicorn/pico_unicorn)
         add_executable(foowrite
@@ -99,7 +150,9 @@ if(BUILD_FOR_PICO)
             pico_unicorn
         )
     endif()
-    if(BUILD_FOR_BADGER)
+    if(DISPLAY STREQUAL "BADGER")
+        message("Building for Badger")
+        set(TARGET_NAME "-badger")
         include(libraries/badger2040/badger2040)
         add_executable(foowrite
             src/main.c
@@ -149,9 +202,9 @@ if(BUILD_FOR_PICO)
     # create map/bin/hex/uf2 file in addition to ELF.
     pico_add_extra_outputs(foowrite)
 
-    if(USE_QWERTY)
-        set_target_properties(foowrite PROPERTIES OUTPUT_NAME "foowrite_qwerty")
-    endif()
+
+    set_target_properties(foowrite PROPERTIES OUTPUT_NAME "${PROJECT_NAME}${TARGET_NAME}${LAYOUT_NAME}")
+
 
 else()
     # On Mac we do can run tests instead

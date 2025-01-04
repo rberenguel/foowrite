@@ -28,6 +28,7 @@ class Editor {
     row_ = document_.end();
     mode_ = EditorMode::kNormal;
   }
+  void Refresh();
   void ProcessKey(const uint8_t key, KeyModifiers* modifiers, bool batched);
   void ProcessHandlers();
   void ProcessEvent(EventType ev);
