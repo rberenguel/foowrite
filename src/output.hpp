@@ -31,7 +31,6 @@ class Output {
   void ProcessEvent(EventType ev);
 
  private:
-  int emits_with_no_clear = 0;
   int prev_button_press_ = -1;
   int backlight_brightness = 40;
   int prev_line_start_ = -1;

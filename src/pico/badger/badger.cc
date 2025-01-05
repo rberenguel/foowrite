@@ -28,17 +28,21 @@
 pimoroni::Badger2040 badger;
 
 std::string on_screen = "";
+int on_screen_cursor = -1;
 
 int last_key_in = -1;
 
 struct ScreenUpdate {
   long unsigned int x;
   long unsigned int y;
-  long unsigned int width;
-  long unsigned int height;
+  int width;
+  int height;
 };
 
+int emits_with_no_clear = 0;
+
 std::list<ScreenUpdate> screen_updates;
+std::list<int> prev_line_starts;
 
 void AdjustYAndHeight(ScreenUpdate* update) {
   // Calculate the remainder when y is divided by 8
@@ -76,7 +80,7 @@ void MergeUpdates() {
       is_first = false;
       continue;  // Kind of ugly, but I don't want to fiddle with iterators
     }
-    if (prev.y == curr.y && (prev.x + prev.width == curr.x)) {
+    if (prev.y == curr.y && (prev.x + prev.width >= curr.x)) {
       prev.width += curr.width;
     } else {
       merged.push_back(prev);
@@ -108,6 +112,7 @@ void text(pimoroni::Badger2040* badger, const std::string_view& t,
   const uint8_t letter_spacing = 1;
   bool fixed_width = true;
   int num_lines = 0;
+  int new_cursor_pos = -1;
   const bitmap::font_t* font = &font8;  // TODO(me) improve
   uint32_t char_offset = 0;
   uint32_t line_offset = 0;  // line (if wrapping) offset
@@ -117,6 +122,7 @@ void text(pimoroni::Badger2040* badger, const std::string_view& t,
   space_width += letter_spacing * scale;
 
   screen_updates.clear();
+  prev_line_starts.clear();
 
   bool cursor_found = false;
   int start_of_frame = 0;
@@ -166,12 +172,17 @@ void text(pimoroni::Badger2040* badger, const std::string_view& t,
       line_offset += (font->height + 1) * scale;
       if (!cursor_found) {
         (*prev_line_start_) = prev_prev_line_start_;
+        prev_line_starts.push_back(prev_prev_line_start_);
         prev_prev_line_start_ = i;
       }
 
       if (!cursor_found) {
         printf("Changing start of frame\n");
-        start_of_frame = i;
+        for(auto &prevs : prev_line_starts){
+          printf("Prev lines: %d\n", prevs);
+        }
+        start_of_frame = prev_line_starts.size() < 5 ? 0 : *std::next(prev_line_starts.rbegin(), 4);//i - fmin(100, i);  // TODO(me) Convert to a screen-dependent constant
+        start_of_frame = start_of_frame < 0 ? 0 : start_of_frame;
       }
       if (cursor_found && (*next_line_start_) < 0) {
         (*next_line_start_) = i;
@@ -219,6 +230,8 @@ void text(pimoroni::Badger2040* badger, const std::string_view& t,
   auto to_display = tc.substr(i);
   i = 0;  //  Resetting so all comparisons make sense
   printf("To display: \n --- \n %s \n ---\n", to_display.c_str());
+  printf("On screen before: \n --- \n %s \n ---\n", on_screen.c_str());
+  auto previous_screen_length = on_screen.size();
   bool cursor_drawn = false;
   while (i < to_display.length()) {
     size_t next_space = to_display.find(' ', i + 1);
@@ -235,7 +248,11 @@ void text(pimoroni::Badger2040* badger, const std::string_view& t,
     size_t next_break = std::min(next_space, next_linebreak);
 
     uint16_t word_width = 0;
+    bool same = true;
     for (size_t j = i; j < next_break; j++) {
+      if(on_screen.size() > j && on_screen[j] != to_display[j]){
+        same = false;
+      }
       if (to_display[j] == unicode_sorta::PAGE_194_START) {
         codepage = unicode_sorta::PAGE_194;
         continue;
@@ -248,7 +265,10 @@ void text(pimoroni::Badger2040* badger, const std::string_view& t,
       codepage = unicode_sorta::PAGE_195;
     }
     if (char_offset != 0 && char_offset + word_width > (uint32_t)wrap) {
-      printf("Introducing a cleaning block at word break %d %d %d %d\n",
+      if(same){
+        printf("Not introducing a cleaning block, the word was already broken before\n");
+      } else {
+printf("Introducing a cleaning block at word break %d %d %d %d\n",
              x + char_offset, y + line_offset, 296 - (x + char_offset),
              font->height * scale);
       screen_updates.push_back({x + char_offset, y + line_offset,
@@ -256,6 +276,8 @@ void text(pimoroni::Badger2040* badger, const std::string_view& t,
       badger->pen(15);
       badger->rectangle(x + char_offset, y + line_offset,
                         296 - (x + char_offset), font->height * scale);
+      }
+      
       char_offset = 0;
       line_offset += (font->height + 1) * scale;
       num_lines++;
@@ -265,13 +287,27 @@ void text(pimoroni::Badger2040* badger, const std::string_view& t,
     }
     // draw word
     for (size_t j = i; j < std::min(next_break + 1, to_display.length()); j++) {
+      const int cursor_width = 8;
+      const int shift = cursor_width + 4;
+      if(j == on_screen_cursor){
+        // Try to erase the previous cursor, but this won't trigger a character redraw yet (TODO)
+        badger->pen(15);
+        badger->rectangle(x + char_offset-shift, y + line_offset + 16,
+                                  cursor_width, 16);
+                                  
+       screen_updates.push_back({x + char_offset-shift, y + line_offset + 16,
+                                  cursor_width, 16}); 
+      }
       if (j == cursor_pos) {
         cursor_drawn = true;
         // draw cursor
         if (mode == EditorMode::kNormal) {
           auto width = word_width += bitmap::measure_character(
-              font, to_display[j], scale, codepage, fixed_width);
-          //rect_fun(x + char_offset - width - 1, y + line_offset + 8, width, 2);
+              font, to_display[j], scale, codepage, fixed_width); // Not used?
+          rect_fun(x + char_offset - shift, y + line_offset + 16, cursor_width, 2);
+          screen_updates.push_back({x + char_offset-shift, y + line_offset + 16,
+                                  cursor_width, 16});
+          new_cursor_pos = cursor_pos;
         } else {
           if (cursor_pos != 0) {
             //rect_fun(x + char_offset - 1, y + line_offset, 1, 8);
@@ -357,17 +393,27 @@ void text(pimoroni::Badger2040* badger, const std::string_view& t,
       //rect_fun(x + char_offset - 1, y + line_offset + 4, 1, 4);
     }
   }
-  if (to_display.size() < on_screen.size()) {
+  if (to_display.size() < previous_screen_length) {
+    printf("Introducing two cleanings for a shorter string %d %d %d %d\n", x + char_offset, y + line_offset,
+                              296 - (x + char_offset),
+                              128 - font->height * scale);
     screen_updates.push_back({x + char_offset, y + line_offset,
                               296 - (x + char_offset),
                               128 - font->height * scale});
+    screen_updates.push_back({0, y + line_offset + (font->height + 1) * scale,
+                              296,
+                              128 - (line_offset + (font->height + 1) * scale)});
     badger->pen(15);
+    badger->rectangle(0, y + line_offset + (font->height + 1) * scale,
+                              296,
+                              128 - (line_offset + (font->height + 1) * scale));
     badger->rectangle(
         x + char_offset, y + line_offset, 296 - (x + char_offset),
         128 - font->height * scale);  // TODO(me) this is repeated now
   }
   on_screen = t.substr(start_of_frame);  // This should be a copy
-  printf("On screen: \n --- \n %s \n ---\n", on_screen.c_str());
+  on_screen_cursor = new_cursor_pos;
+  printf("On screen now: \n --- \n %s \n ---\n", on_screen.c_str());
   // TODO(me) on_screen should actually start at frame
 }
 
@@ -394,13 +440,20 @@ void Output::Emit(const std::string& current_line_str, const int cursor_pos,
   // - Compare the current line splits with the displayed line splits
   // - Anything equal at the beginning of the line stays
   // - Anything different up to the end of the line triggers a clean
-  if (emits_with_no_clear > 100) {
+  if(current_line_str.empty() && mode == EditorMode::kInsert){
+    badger.pen(15);
+    badger.clear();
     badger.update(true);
   }
+  if (emits_with_no_clear > 100) {
+    badger.update(true);
+    emits_with_no_clear = 0;
+  }
+  ++emits_with_no_clear;
   //uint8_t updateFlags = 0;
   badger.pen(0);
   badger.update_speed(3);
-  badger.thickness(1);
+  badger.thickness(2);
   badger.font("bitmap8");
   auto now = CurrentTimeInMillis();
   if (now - last_key_in < 150) {
@@ -530,7 +583,7 @@ void Output::Emit(const std::string& current_line_str, const int cursor_pos,
     }
   }
   */
-  ++emits_with_no_clear;
+
 }
 
 void flush() {
