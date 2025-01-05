@@ -145,8 +145,7 @@ if(BUILD_FOR_PICO)
             bluepad32
             hardware_pio
             hardware_dma
-            #pimoroni_i2c
-            pico_graphics
+            #pico_graphics
             pico_unicorn
         )
     endif()
@@ -154,23 +153,24 @@ if(BUILD_FOR_PICO)
         message("Building for Badger")
         set(TARGET_NAME "-badger")
         include(libraries/badger2040/badger2040)
+        #include(libraries/pico_graphics/pico_graphics)
         add_executable(foowrite
             src/main.c
             src/screendiffer.cc
             src/pico/pico_bt.c
-            src/pico/keyboard.
+            src/pico/keyboard.c
             src/pico/badger/splash.cc
             src/pico/badger/badger.cc
             src/editor.cc
+            src/pico/saving.cc
             src/pico/layout.c
         )
         target_link_libraries(foowrite PUBLIC
             flash_filesystem
             badger2040
+            pico_graphics
             hardware_spi
             pico_multicore
-            #hardware_pio
-            #hardware_dma
             pimoroni_i2c
             pico_stdlib
             pico_cyw43_arch_none

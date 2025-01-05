@@ -95,9 +95,6 @@ void text(pimoroni::PicoGraphics_Pen1Bit* grph, const std::string_view& t,
         (*next_line_start_) = i;
       }
     }
-    auto rect_fun = [grph](int32_t x, int32_t y, int32_t w, int32_t h) {
-      grph->rectangle(pimoroni::Rect(x, y, w, h));
-    };
     for (size_t j = i; j < std::min(next_break + 1, t.length()); j++) {
       if (j == cursor_pos) {
         cursor_found = true;
