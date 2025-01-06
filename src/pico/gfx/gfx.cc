@@ -51,7 +51,7 @@ void text(pimoroni::PicoGraphics_Pen1Bit* grph, const std::string_view& t,
   size_t i = 0;
 
   (*prev_line_start_) = -1;
-  int prev_prev_line_start_ = -1;
+  int prev_prev_line_start_ = -1; // TODO(me) this needs to go away now
   (*next_line_start_) = -1;
 
   while (i < t.length()) {
