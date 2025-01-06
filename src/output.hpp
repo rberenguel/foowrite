@@ -36,6 +36,5 @@ class Output {
   int prev_line_start_ = -1;
   int next_line_start_ = -1;
   Editor* editor;
-  std::vector<std::string> displayed_lines_;
   // The operations would feel better if this was an array and not a list though
 };

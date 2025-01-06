@@ -19,6 +19,9 @@
 #include "pico/time.h"
 #include "pico_display.hpp"
 
+#define N_LINES_PER_SCREEN 5
+std::list<int> prev_line_starts;
+
 pimoroni::ST7789 st7789(pimoroni::PicoDisplay::WIDTH,
                         pimoroni::PicoDisplay::HEIGHT, pimoroni::ROTATE_0,
                         false, get_spi_pins(pimoroni::BG_SPI_FRONT));
@@ -50,6 +53,7 @@ void text(pimoroni::PicoGraphics_PenP8* grph, const std::string_view& t,
   space_width += letter_spacing * scale;
 
   bool cursor_found = false;
+  prev_line_starts.clear();
   int start_of_frame = 0;
   size_t i = 0;
 
@@ -92,11 +96,13 @@ void text(pimoroni::PicoGraphics_PenP8* grph, const std::string_view& t,
       line_offset += (font->height + 1) * scale;
       if (!cursor_found) {
         (*prev_line_start_) = prev_prev_line_start_;
+        prev_line_starts.push_back(prev_prev_line_start_);
         prev_prev_line_start_ = i;
       }
 
       if (!cursor_found) {
-        start_of_frame = i;
+        start_of_frame = prev_line_starts.size() < N_LINES_PER_SCREEN ? 0 : *std::next(prev_line_starts.rbegin(), N_LINES_PER_SCREEN - 1);
+        start_of_frame = start_of_frame < 0 ? 0 : start_of_frame;
       }
       if (cursor_found && (*next_line_start_) < 0) {
         (*next_line_start_) = i;

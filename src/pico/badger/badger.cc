@@ -23,7 +23,8 @@
 // This won't match the current definitions used for the gfx pack,
 // so won't compile.
 
-#define N_LINES 5
+#define N_LINES_PER_SCREEN 5
+std::list<int> prev_line_starts;
 
 pimoroni::Badger2040 badger;
 
@@ -42,7 +43,6 @@ struct ScreenUpdate {
 int emits_with_no_clear = 0;
 
 std::list<ScreenUpdate> screen_updates;
-std::list<int> prev_line_starts;
 
 void AdjustYAndHeight(ScreenUpdate* update) {
   // Calculate the remainder when y is divided by 8
@@ -177,11 +177,7 @@ void text(pimoroni::Badger2040* badger, const std::string_view& t,
       }
 
       if (!cursor_found) {
-        printf("Changing start of frame\n");
-        for(auto &prevs : prev_line_starts){
-          printf("Prev lines: %d\n", prevs);
-        }
-        start_of_frame = prev_line_starts.size() < 5 ? 0 : *std::next(prev_line_starts.rbegin(), 4);//i - fmin(100, i);  // TODO(me) Convert to a screen-dependent constant
+        start_of_frame = prev_line_starts.size() < N_LINES_PER_SCREEN ? 0 : *std::next(prev_line_starts.rbegin(), N_LINES_PER_SCREEN - 1);
         start_of_frame = start_of_frame < 0 ? 0 : start_of_frame;
       }
       if (cursor_found && (*next_line_start_) < 0) {
@@ -433,6 +429,7 @@ void Output::CommandLine(const std::string& command) {
   text(&badger, command, -1, 0, 120, 296, 1, EditorMode::kCommandLineMode,
        &prev_line_start_, &next_line_start_);
   badger.partial_update(0, 112, 296, 16, true);
+  
 }
 
 void Output::Emit(const std::string& current_line_str, const int cursor_pos,
@@ -510,9 +507,6 @@ void flush() {
 
 void Output::Init(Editor* e) {
   editor = e;
-  for (auto i = 0; i < N_LINES; i++) {
-    displayed_lines_.push_back("");
-  }
   printf("\n\n=======\nbadger2040 starting up\n\n");
 
   badger.init();
