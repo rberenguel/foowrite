@@ -58,7 +58,7 @@ void text(pimoroni::PicoGraphics_PenP8* grph, const std::string_view& t,
   size_t i = 0;
 
   (*prev_line_start_) = -1;
-  int prev_prev_line_start_ = -1;
+  prev_line_starts.push_back(-1);
   (*next_line_start_) = -1;
 
   while (i < t.length()) {
@@ -95,13 +95,15 @@ void text(pimoroni::PicoGraphics_PenP8* grph, const std::string_view& t,
       char_offset = 0;
       line_offset += (font->height + 1) * scale;
       if (!cursor_found) {
-        (*prev_line_start_) = prev_prev_line_start_;
-        prev_line_starts.push_back(prev_prev_line_start_);
-        prev_prev_line_start_ = i;
+        (*prev_line_start_) = prev_line_starts.back();
+        prev_line_starts.push_back(i);
       }
 
       if (!cursor_found) {
-        start_of_frame = prev_line_starts.size() < N_LINES_PER_SCREEN ? 0 : *std::next(prev_line_starts.rbegin(), N_LINES_PER_SCREEN - 1);
+        start_of_frame =
+            prev_line_starts.size() < N_LINES_PER_SCREEN
+                ? 0
+                : *std::next(prev_line_starts.rbegin(), N_LINES_PER_SCREEN - 1);
         start_of_frame = start_of_frame < 0 ? 0 : start_of_frame;
       }
       if (cursor_found && (*next_line_start_) < 0) {
@@ -323,6 +325,10 @@ void Output::Init(Editor* e) {
 void Output::Command(const OutputCommands& command) {
   switch (command) {
     case OutputCommands::kSplash:
+      graphics.set_pen(WHITE);
+      graphics.clear();
+      splash(graphics);
+      st7789.update(&graphics);
       break;
     case OutputCommands::kCommandMode:
       break;

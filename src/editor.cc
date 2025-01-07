@@ -614,7 +614,7 @@ void Editor::ProcessKey(const uint8_t key, KeyModifiers* modifiers,
   }
 }
 
-void Editor::Refresh(){
+void Editor::Refresh() {
   // Helper to get the output to request a refresh
   output->Emit(current_line_, ncolumn_, mode_);
 }

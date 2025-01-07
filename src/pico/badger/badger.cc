@@ -28,73 +28,20 @@ std::list<int> prev_line_starts;
 
 pimoroni::Badger2040 badger;
 
-std::string on_screen = "";
-int on_screen_cursor = -1;
-
-int last_key_in = -1;
+namespace BadgerGlobals {
 
 struct ScreenUpdate {
-  long unsigned int x;
-  long unsigned int y;
+  uint32_t x;
+  uint32_t y;
   int width;
   int height;
 };
 
+std::string on_screen = "";  // Removing the cpplint rule for this
+int on_screen_cursor = -1;
+int last_key_in = -1;
 int emits_with_no_clear = 0;
-
 std::list<ScreenUpdate> screen_updates;
-
-void AdjustYAndHeight(ScreenUpdate* update) {
-  // Calculate the remainder when y is divided by 8
-  int remainder = update->y % 8;
-
-  // Adjust y to be the nearest multiple of 8 less than or equal to the current y
-  update->y -= remainder;
-
-  // Adjust height to compensate for the change in y
-  update->height += remainder;
-
-  // Ensure the height covers the original area by adding any remaining difference
-  // to make it a multiple of 8.
-  int heightRemainder = update->height % 8;
-  if (heightRemainder != 0) {
-    update->height += 8 - heightRemainder;
-  }
-}
-
-void MergeUpdates() {
-  printf("Merging\n");
-  if (screen_updates.empty()) {
-    return;
-  }
-  for (auto& update : screen_updates) {
-    AdjustYAndHeight(&update);
-  }
-  std::list<ScreenUpdate> merged;
-  bool is_first = true;
-  ScreenUpdate prev;
-  for (const auto& curr : screen_updates) {
-    printf("(%d,%d - %d x %d) ", curr.x, curr.y, curr.width, curr.height);
-    if (is_first) {
-      prev = curr;
-      is_first = false;
-      continue;  // Kind of ugly, but I don't want to fiddle with iterators
-    }
-    if (prev.y == curr.y && (prev.x + prev.width >= curr.x)) {
-      prev.width += curr.width;
-    } else {
-      merged.push_back(prev);
-      prev = curr;
-    }
-  }
-  merged.push_back(prev);
-  printf("\n");
-  for (auto& m : merged) {
-    printf("Merged: (%d,%d - %d x %d)\n", m.x, m.y, m.width, m.height);
-  }
-  screen_updates.clear();
-  screen_updates = std::move(merged);
-}
 
 void text(pimoroni::Badger2040* badger, const std::string_view& t,
           const int cursor_pos, const int32_t x, const int32_t y,
@@ -121,7 +68,7 @@ void text(pimoroni::Badger2040* badger, const std::string_view& t,
       bitmap::measure_character(font, ' ', scale, codepage, fixed_width);
   space_width += letter_spacing * scale;
 
-  screen_updates.clear();
+  BadgerGlobals::screen_updates.clear();
   prev_line_starts.clear();
 
   bool cursor_found = false;
@@ -129,13 +76,8 @@ void text(pimoroni::Badger2040* badger, const std::string_view& t,
   size_t i = 0;
 
   (*prev_line_start_) = -1;
-  int prev_prev_line_start_ = -1;
+  prev_line_starts.push_back(-1);
   (*next_line_start_) = -1;
-
-  /*if(cursor_pos == t.size()){
-    // TODO(me) Why is this needed for the badger but not the others?
-    cursor_found = true;
-  }*/
 
   while (i < t.length()) {
     size_t next_space = t.find(' ', i + 1);
@@ -171,13 +113,15 @@ void text(pimoroni::Badger2040* badger, const std::string_view& t,
       char_offset = 0;
       line_offset += (font->height + 1) * scale;
       if (!cursor_found) {
-        (*prev_line_start_) = prev_prev_line_start_;
-        prev_line_starts.push_back(prev_prev_line_start_);
-        prev_prev_line_start_ = i;
+        (*prev_line_start_) = prev_line_starts.back();
+        prev_line_starts.push_back(i);
       }
 
       if (!cursor_found) {
-        start_of_frame = prev_line_starts.size() < N_LINES_PER_SCREEN ? 0 : *std::next(prev_line_starts.rbegin(), N_LINES_PER_SCREEN - 1);
+        start_of_frame =
+            prev_line_starts.size() < N_LINES_PER_SCREEN
+                ? 0
+                : *std::next(prev_line_starts.rbegin(), N_LINES_PER_SCREEN - 1);
         start_of_frame = start_of_frame < 0 ? 0 : start_of_frame;
       }
       if (cursor_found && (*next_line_start_) < 0) {
@@ -185,7 +129,6 @@ void text(pimoroni::Badger2040* badger, const std::string_view& t,
       }
     }
     for (size_t j = i; j < std::min(next_break + 1, t.length()); j++) {
-      //printf("j: %d c_p: %d\n", j, cursor_pos);
       if (j == cursor_pos) {
         cursor_found = true;
       }
@@ -246,7 +189,7 @@ void text(pimoroni::Badger2040* badger, const std::string_view& t,
     uint16_t word_width = 0;
     bool same = true;
     for (size_t j = i; j < next_break; j++) {
-      if(on_screen.size() > j && on_screen[j] != to_display[j]){
+      if (on_screen.size() > j && on_screen[j] != to_display[j]) {
         same = false;
       }
       if (to_display[j] == unicode_sorta::PAGE_194_START) {
@@ -261,19 +204,22 @@ void text(pimoroni::Badger2040* badger, const std::string_view& t,
       codepage = unicode_sorta::PAGE_195;
     }
     if (char_offset != 0 && char_offset + word_width > (uint32_t)wrap) {
-      if(same){
-        printf("Not introducing a cleaning block, the word was already broken before\n");
+      if (same) {
+        printf(
+            "Not introducing a cleaning block, the word was already broken "
+            "before\n");
       } else {
-printf("Introducing a cleaning block at word break %d %d %d %d\n",
-             x + char_offset, y + line_offset, 296 - (x + char_offset),
-             font->height * scale);
-      screen_updates.push_back({x + char_offset, y + line_offset,
-                                296 - (x + char_offset), font->height * scale});
-      badger->pen(15);
-      badger->rectangle(x + char_offset, y + line_offset,
-                        296 - (x + char_offset), font->height * scale);
+        printf("Introducing a cleaning block at word break %d %d %d %d\n",
+               x + char_offset, y + line_offset, 296 - (x + char_offset),
+               font->height * scale);
+        BadgerGlobals::screen_updates.push_back(
+            {x + char_offset, y + line_offset, 296 - (x + char_offset),
+             font->height * scale});
+        badger->pen(15);
+        badger->rectangle(x + char_offset, y + line_offset,
+                          296 - (x + char_offset), font->height * scale);
       }
-      
+
       char_offset = 0;
       line_offset += (font->height + 1) * scale;
       num_lines++;
@@ -285,30 +231,33 @@ printf("Introducing a cleaning block at word break %d %d %d %d\n",
     for (size_t j = i; j < std::min(next_break + 1, to_display.length()); j++) {
       const int cursor_width = 8;
       const int shift = cursor_width + 4;
-      if(j == on_screen_cursor){
-        // Try to erase the previous cursor, but this won't trigger a character redraw yet (TODO)
+      if (j == on_screen_cursor) {
+        // TODO(me) Try to erase the previous cursor,
+        // but this won't trigger a character redraw yet
         badger->pen(15);
-        badger->rectangle(x + char_offset-shift, y + line_offset + 16,
-                                  cursor_width, 16);
-                                  
-       screen_updates.push_back({x + char_offset-shift, y + line_offset + 16,
-                                  cursor_width, 16}); 
+        badger->rectangle(x + char_offset - shift, y + line_offset + 16,
+                          cursor_width, 16);
+
+        BadgerGlobals::screen_updates.push_back(
+            {x + char_offset - shift, y + line_offset + 16, cursor_width, 16});
       }
       if (j == cursor_pos) {
         cursor_drawn = true;
         // draw cursor
         if (mode == EditorMode::kNormal) {
           auto width = word_width += bitmap::measure_character(
-              font, to_display[j], scale, codepage, fixed_width); // Not used?
-          rect_fun(x + char_offset - shift, y + line_offset + 16, cursor_width, 2);
-          screen_updates.push_back({x + char_offset-shift, y + line_offset + 16,
-                                  cursor_width, 16});
+              font, to_display[j], scale, codepage, fixed_width);  // Not used?
+          rect_fun(x + char_offset - shift, y + line_offset + 16, cursor_width,
+                   2);
+          BadgerGlobals::screen_updates.push_back({x + char_offset - shift,
+                                                   y + line_offset + 16,
+                                                   cursor_width, 16});
           new_cursor_pos = cursor_pos;
         } else {
           if (cursor_pos != 0) {
-            //rect_fun(x + char_offset - 1, y + line_offset, 1, 8);
+            // TODO(me)
           } else {
-            //rect_fun(x + char_offset, y + line_offset, 1, 8);
+            // TODO(me)
           }
         }
       }
@@ -322,9 +271,9 @@ printf("Introducing a cleaning block at word break %d %d %d %d\n",
         printf("Introducing a cleaning block at new line %d %d %d %d\n",
                x + char_offset, y + line_offset, 296 - (x + char_offset),
                font->height * scale);
-        screen_updates.push_back({x + char_offset, y + line_offset,
-                                  296 - (x + char_offset),
-                                  font->height * scale});
+        BadgerGlobals::screen_updates.push_back(
+            {x + char_offset, y + line_offset, 296 - (x + char_offset),
+             font->height * scale});
         badger->pen(15);
         badger->rectangle(x + char_offset, y + line_offset,
                           296 - (x + char_offset), font->height * scale);
@@ -334,7 +283,7 @@ printf("Introducing a cleaning block at word break %d %d %d %d\n",
       } else if (to_display[j] == ' ') {
         if (on_screen.size() > j) {
           if (on_screen[j] != ' ') {
-            screen_updates.push_back(
+            BadgerGlobals::screen_updates.push_back(
                 {x + char_offset, y + line_offset, space_width,
                  font->height *
                      scale});  // TODO(me) This is hacky, to get merging to work
@@ -352,24 +301,25 @@ printf("Introducing a cleaning block at word break %d %d %d %d\n",
                           letter_spacing * scale;
         if (on_screen.size() > j) {
           if (to_display[j] == on_screen[j]) {
-            //printf("No partial update, same character '%c'\n", t[j]);
+            // TODO(me)
           }
           if (to_display[j] != on_screen[j]) {
-            //printf("Partial update, different character '%c' != '%c'\n", on_screen[j], t[j]);
-            screen_updates.push_back({x + char_offset, y + line_offset,
-                                      char_width, font->height * scale});
+            BadgerGlobals::screen_updates.push_back(
+                {x + char_offset, y + line_offset, char_width,
+                 font->height * scale});
             badger->pen(15);
             badger->rectangle(x + char_offset, y + line_offset, char_width,
                               font->height * scale);
           }
         } else {
-          //printf("Partial update, adding character '%c'\n", t[j]);
-          screen_updates.push_back({x + char_offset, y + line_offset,
-                                    char_width, font->height * scale});
+          BadgerGlobals::screen_updates.push_back({x + char_offset,
+                                                   y + line_offset, char_width,
+                                                   font->height * scale});
           badger->pen(15);
           badger->rectangle(x + char_offset, y + line_offset, char_width,
                             font->height * scale);
-          // The case where the sent string is shorter is not covered in this else
+          // The case where the sent string is shorter is
+          // not covered in this else
         }
         badger->pen(0);
         character(font, rect_fun, to_display[j], x + char_offset,
@@ -383,26 +333,24 @@ printf("Introducing a cleaning block at word break %d %d %d %d\n",
   if (!cursor_drawn && cursor_pos != -1) {
     // draw cursor at end.
     if (mode == EditorMode::kNormal) {
-      //rect_fun(x + char_offset - 5, y + line_offset + 8, 5,
-      //         2);  // Eyeballing the width here.
+      // TODO(me)
     } else {
-      //rect_fun(x + char_offset - 1, y + line_offset + 4, 1, 4);
+      // TODO(me)
     }
   }
   if (to_display.size() < previous_screen_length) {
-    printf("Introducing two cleanings for a shorter string %d %d %d %d\n", x + char_offset, y + line_offset,
-                              296 - (x + char_offset),
-                              128 - font->height * scale);
-    screen_updates.push_back({x + char_offset, y + line_offset,
-                              296 - (x + char_offset),
-                              128 - font->height * scale});
-    screen_updates.push_back({0, y + line_offset + (font->height + 1) * scale,
-                              296,
-                              128 - (line_offset + (font->height + 1) * scale)});
+    printf("Introducing two cleanings for a shorter string %d %d %d %d\n",
+           x + char_offset, y + line_offset, 296 - (x + char_offset),
+           128 - font->height * scale);
+    BadgerGlobals::screen_updates.push_back({x + char_offset, y + line_offset,
+                                             296 - (x + char_offset),
+                                             128 - font->height * scale});
+    BadgerGlobals::screen_updates.push_back(
+        {0, y + line_offset + (font->height + 1) * scale, 296,
+         128 - (line_offset + (font->height + 1) * scale)});
     badger->pen(15);
-    badger->rectangle(0, y + line_offset + (font->height + 1) * scale,
-                              296,
-                              128 - (line_offset + (font->height + 1) * scale));
+    badger->rectangle(0, y + line_offset + (font->height + 1) * scale, 296,
+                      128 - (line_offset + (font->height + 1) * scale));
     badger->rectangle(
         x + char_offset, y + line_offset, 296 - (x + char_offset),
         128 - font->height * scale);  // TODO(me) this is repeated now
@@ -412,6 +360,62 @@ printf("Introducing a cleaning block at word break %d %d %d %d\n",
   printf("On screen now: \n --- \n %s \n ---\n", on_screen.c_str());
   // TODO(me) on_screen should actually start at frame
 }
+
+void AdjustYAndHeight(BadgerGlobals::ScreenUpdate* update) {
+  // Calculate the remainder when y is divided by 8
+  int remainder = update->y % 8;
+
+  // Adjust y to be the nearest multiple of 8 less than or
+  // equal to the current y
+  update->y -= remainder;
+
+  // Adjust height to compensate for the change in y
+  update->height += remainder;
+
+  // Ensure the height covers the original area by adding
+  // any remaining difference
+  // to make it a multiple of 8.
+  int heightRemainder = update->height % 8;
+  if (heightRemainder != 0) {
+    update->height += 8 - heightRemainder;
+  }
+}
+
+void MergeUpdates() {
+  printf("Merging\n");
+  if (BadgerGlobals::screen_updates.empty()) {
+    return;
+  }
+  for (auto& update : BadgerGlobals::screen_updates) {
+    AdjustYAndHeight(&update);
+  }
+  std::list<BadgerGlobals::ScreenUpdate> merged;
+  bool is_first = true;
+  BadgerGlobals::ScreenUpdate prev;
+  for (const auto& curr : BadgerGlobals::screen_updates) {
+    printf("(%d,%d - %d x %d) ", curr.x, curr.y, curr.width, curr.height);
+    if (is_first) {
+      prev = curr;
+      is_first = false;
+      continue;  // Kind of ugly, but I don't want to fiddle with iterators
+    }
+    if (prev.y == curr.y && (prev.x + prev.width >= curr.x)) {
+      prev.width += curr.width;
+    } else {
+      merged.push_back(prev);
+      prev = curr;
+    }
+  }
+  merged.push_back(prev);
+  printf("\n");
+  for (auto& m : merged) {
+    printf("Merged: (%d,%d - %d x %d)\n", m.x, m.y, m.width, m.height);
+  }
+  BadgerGlobals::screen_updates.clear();
+  BadgerGlobals::screen_updates = std::move(merged);
+}
+
+}  // namespace BadgerGlobals
 
 void Output::CommandLine(const std::list<char>& command) {
   std::string as_str(command.begin(), command.end());
@@ -426,10 +430,10 @@ void Output::CommandLine(const std::string& command) {
   badger.pen(15);
   badger.rectangle(0, 112, 296, 16);
   badger.pen(0);
-  text(&badger, command, -1, 0, 120, 296, 1, EditorMode::kCommandLineMode,
-       &prev_line_start_, &next_line_start_);
+  BadgerGlobals::text(&badger, command, -1, 0, 120, 296, 1,
+                      EditorMode::kCommandLineMode, &prev_line_start_,
+                      &next_line_start_);
   badger.partial_update(0, 112, 296, 16, true);
-  
 }
 
 void Output::Emit(const std::string& current_line_str, const int cursor_pos,
@@ -440,50 +444,53 @@ void Output::Emit(const std::string& current_line_str, const int cursor_pos,
   // - Anything equal at the beginning of the line stays
   // - Anything different up to the end of the line triggers a clean
   printf("Emit with mode: %d\n", mode);
-  if(mode == EditorMode::kCommandLineMode){
+  if (mode == EditorMode::kCommandLineMode) {
     // Avoid refreshing the whole screen with no reason to do it
     return;
   }
-  if(current_line_str.empty() && mode == EditorMode::kInsert && !on_screen.empty()){
-    // TODO(me) This might still not be enough (i.e. comparing with empty screen is needed, but might not be enough)
+  if (current_line_str.empty() && mode == EditorMode::kInsert &&
+      !(BadgerGlobals::on_screen.empty())) {
+    // TODO(me) This might still not be enough
+    // (i.e. comparing with empty screen is needed, but might not be enough)
     badger.pen(15);
     badger.clear();
     badger.update(true);
   }
-  if (emits_with_no_clear > 100) {
+  if (BadgerGlobals::emits_with_no_clear > 100) {
     badger.update(true);
-    emits_with_no_clear = 0;
+    BadgerGlobals::emits_with_no_clear = 0;
   }
-  ++emits_with_no_clear;
+  ++(BadgerGlobals::emits_with_no_clear);
   badger.pen(0);
   badger.update_speed(3);
   badger.thickness(2);
   badger.font("bitmap8");
   auto now = CurrentTimeInMillis();
-  if (now - last_key_in < 150) {
+  if (now - BadgerGlobals::last_key_in < 150) {
     printf("Avoiding a fast write\n");
-    last_key_in = now;
-    return;  // TODO(me) this should not return, but call text first to make sure the screen is updated with what it _should_ have
+    BadgerGlobals::last_key_in = now;
+    return;  // TODO(me) this should not return,
+    // but call text first to make sure the screen is updated
+    // with what it _should_ have
   }
-  last_key_in = now;
+  BadgerGlobals::last_key_in = now;
 
-  text(&badger, current_line_str, cursor_pos, 0, 0, 296, 2, mode,
-       &prev_line_start_, &next_line_start_);
+  BadgerGlobals::text(&badger, current_line_str, cursor_pos, 0, 0, 296, 2, mode,
+                      &prev_line_start_, &next_line_start_);
 
   if (!badger.is_busy()) {
-    MergeUpdates();
-    if (screen_updates.size() >= 6) {
+    BadgerGlobals::MergeUpdates();
+    if (BadgerGlobals::screen_updates.size() >= 6) {
       badger.update(true);
       return;
     }
 
-    for (auto& update : screen_updates) {
-      //printf("Merged update: (%d,%d - %d x %d)\n", update.x, update.y, update.width, update.height);
-      //badger.partial_update(skip_size, i * 24, clear_size, 24 + i * 24, true);
+    for (auto it = BadgerGlobals::screen_updates.begin();
+         it != BadgerGlobals::screen_updates.end(); ++it) {
+      auto& update = *it;
       badger.partial_update(update.x, update.y, update.width, update.height,
                             true);
     }
-    //badger.update();
   } else {
     printf("Badger busy\n");
   }
